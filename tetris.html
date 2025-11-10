@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Tetris Simple</title>
+<style>
+  #controls button{
+    font-size:28px;
+    padding:14px 18px;
+    background:#333;
+    border:1px solid #999;
+    border-radius:8px;
+    color:white;
+}  body{background:#111;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;color:white;font-family:Arial}
+    canvas{background:#222;border:3px solid #555}
+</style>
+</head>
+<body>
+    <div id="controls" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);display:flex;gap:12px;">
+    <button data-btn="left">◀️</button>
+    <button data-btn="rotate">🔄</button>
+    <button data-btn="right">▶️</button>
+    <button data-btn="down">⬇️</button>
+    <button data-btn="hard">⏬</button>
+</div>
+<canvas width="300" height="600" id="game"></canvas>
+<canvas width="120" height="120" id="next"></canvas>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const nextCanvas = document.getElementById('next');
+const nextCtx = nextCanvas.getContext('2d');
+const COLS = 10;
+const ROWS = 20;
+const BLOCK = 30;
+
+let board = Array.from({length:ROWS},()=>Array(COLS).fill(0));
+
+const shapes = [
+    [[1,1,1,1]],     // I
+    [[1,1],[1,1]],   // O
+    [[0,1,0],[1,1,1]], // T
+    [[1,0,0],[1,1,1]], // J
+    [[0,0,1],[1,1,1]], // L
+    [[1,1,0],[0,1,1]], // S
+    [[0,1,1],[1,1,0]]  // Z
+];
+
+let gameOver = false;
+const colors = [
+    "cyan",    // I
+    "yellow",  // O
+    "purple",  // T
+    "blue",    // J
+    "orange",  // L
+    "green",   // S
+    "red"      // Z
+];
+function randomPiece(){
+    const idx = Math.floor(Math.random()*shapes.length);
+    return {
+        shape: shapes[idx],
+        color: colors[idx],
+        y:0,
+        x:3
+    }
+}
+
+let nextPiece = randomPiece();
+let piece = randomPiece();
+drawNext();
+const scoreEl = document.createElement("div");
+scoreEl.style.position="absolute";
+scoreEl.style.top="20px";
+scoreEl.style.right="20px";
+scoreEl.style.color="white";
+scoreEl.style.fontSize="24px";
+scoreEl.innerText="Score : 0";
+document.body.appendChild(scoreEl);
+const restartBtn = document.createElement("button");
+restartBtn.innerText = "RESTART";
+restartBtn.style.position="absolute";
+restartBtn.style.top="60px";
+restartBtn.style.right="20px";
+restartBtn.style.padding="8px 14px";
+restartBtn.style.fontSize="18px";
+restartBtn.style.display="none";
+document.body.appendChild(restartBtn);
+
+restartBtn.onclick = ()=>{
+    board = Array.from({length:ROWS},()=>Array(COLS).fill(0));
+    score = 0;
+    scoreEl.innerText = "Score : 0";
+    piece = randomPiece();
+    gameOver = false;
+    restartBtn.style.display="none";
+};
+
+function draw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    // board
+    for(let r=0;r<ROWS;r++){
+        for(let c=0;c<COLS;c++){
+            if(board[r][c]) drawBlock(c,r);
+        }
+    }
+    // active block
+    piece.shape.forEach((row,dy)=>{
+    row.forEach((val,dx)=>{
+        if(val) drawBlock(piece.x+dx,piece.y+dy, piece.color);
+    })
+})
+}
+function drawNext(){
+    nextCtx.clearRect(0,0,nextCanvas.width,nextCanvas.height);
+    nextPiece.shape.forEach((row,dy)=>{
+        row.forEach((val,dx)=>{
+            if(val){
+                nextCtx.fillStyle = nextPiece.color;
+                nextCtx.fillRect(dx*30, dy*30, 30,30);
+                nextCtx.strokeStyle="black";
+                nextCtx.strokeRect(dx*30, dy*30, 30,30);
+            }
+        })
+    })
+}
+function drawBlock(x,y,color="white"){
+    ctx.fillStyle=color;
+    ctx.fillRect(x*BLOCK,y*BLOCK,BLOCK,BLOCK);
+    ctx.strokeStyle="black";
+    ctx.strokeRect(x*BLOCK,y*BLOCK,BLOCK,BLOCK);
+}
+
+function collides(px,py,shape){
+    for(let r=0;r<shape.length;r++){
+        for(let c=0;c<shape[0].length;c++){
+            if(shape[r][c]){
+                let nx = px+c;
+                let ny = py+r;
+                if(nx<0||nx>=COLS||ny>=ROWS) return true;
+                if(ny>=0&&board[ny][nx]) return true;
+            }
+        }
+    }
+    return false;
+}
+
+function lock(){
+    piece.shape.forEach((row,dy)=>{
+        row.forEach((val,dx)=>{
+            if(val) board[piece.y+dy][piece.x+dx]=1;
+        })
+    })
+
+    // hitung line penuh
+    let lines = board.filter(row=> row.every(x=>x)).length;
+
+    // hapus lines penuh
+    board = board.filter(row=> row.some(x=>!x));
+    while(board.length<ROWS) board.unshift(Array(COLS).fill(0));
+
+    // update score
+    if(lines>0){
+        score += lines * 100;
+        scoreEl.innerText = "Score : " + score;
+    }
+
+    piece = nextPiece;
+    nextPiece = randomPiece();
+    drawNext();
+}
+
+function rotate(){
+    const rotated = piece.shape[0].map((_,i)=>
+        piece.shape.map(r=>r[i]).reverse()
+    );
+    if(!collides(piece.x,piece.y,rotated)) piece.shape=rotated;
+}
+
+document.addEventListener("keydown", e=>{
+    if(e.key=="ArrowLeft" && !collides(piece.x-1,piece.y,piece.shape)) piece.x--;
+    if(e.key=="ArrowRight"&& !collides(piece.x+1,piece.y,piece.shape)) piece.x++;
+    if(e.key=="ArrowUp") rotate();
+    if(e.key=="ArrowDown"){
+        if(!collides(piece.x,piece.y+1,piece.shape)) piece.y++;
+    }
+    if(e.key==" ") { // hard drop
+        while(!collides(piece.x,piece.y+1,piece.shape)){
+            piece.y++;
+        }
+        lock();
+    }
+})
+document.getElementById("controls").addEventListener("click", e=>{
+    let k = e.target.dataset.btn;
+    if(k=="left" && !collides(piece.x-1,piece.y,piece.shape)) piece.x--;
+    if(k=="right"&& !collides(piece.x+1,piece.y,piece.shape)) piece.x++;
+    if(k=="rotate") rotate();
+    if(k=="down" && !collides(piece.x,piece.y+1,piece.shape)) piece.y++;
+    if(k=="hard"){while(!collides(piece.x,piece.y+1,piece.shape)){
+        piece.y++;
+    }
+    lock();
+}
+});
+
+function update(){
+    if(gameOver) return;
+
+    if(!collides(piece.x,piece.y+1,piece.shape)) piece.y++;
+    else{
+        lock();
+        // check game over
+        if(collides(piece.x,piece.y,piece.shape)){
+            gameOver = true;
+            restartBtn.style.display="block";
+        }
+    }
+    draw();
+    if(gameOver){
+    ctx.fillStyle="red";
+    ctx.font="48px Arial";
+    ctx.fillText("GAME OVER",20,300);
+}
+}
+setInterval(update,500);
+</script>
+</body>
+</html>
